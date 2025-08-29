@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>St. Jarir Cost — توزيع المصاريف على المنتجات</title>
+<title>St. Jarir Cost — توزيع المصاريف + تقرير + طباعة</title>
 <style>
   :root{--bg:#0f0f12;--card:#15161a;--muted:#8b909a;--text:#e8eaed;--accent:#ff7a00;--ok:#25c26e;--bad:#ff4d4f;}
   *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
@@ -12,9 +12,8 @@
   header h1{margin:0;font-size:16px;white-space:nowrap}
   button{background:#22262b;color:var(--text);border:1px solid #2d3136;padding:6px 10px;border-radius:10px;cursor:pointer}
   button.primary{background:var(--accent);border-color:transparent;color:#111;font-weight:700}
-  select{background:#0f1013;color:var(--text);border:1px solid #2d3136;border-radius:10px;padding:6px 10px}
-  input[type="text"],input[type="number"]{background:#0f1013;color:var(--text);border:1px solid #2d3136;border-radius:10px;padding:8px 10px;text-align:center}
-  main{max-width:1200px;margin:16px auto 80px;padding:0 12px}
+  select,input[type="text"],input[type="number"]{background:#0f1013;color:var(--text);border:1px solid #2d3136;border-radius:10px;padding:8px 10px;text-align:center}
+  main{max-width:1200px;margin:16px auto 100px;padding:0 12px}
   .grid{display:grid;gap:16px}
   @media(min-width:1100px){.grid{grid-template-columns:1.2fr .8fr}}
   .card{background:var(--card);border:1px solid #202227;border-radius:16px;padding:16px}
@@ -32,6 +31,12 @@
   .sep{width:1px;height:28px;background:#2a2d33;display:inline-block;margin:0 6px;border-radius:2px}
   .nowrap{white-space:nowrap}
   td .unit-suffix{font-size:12px;color:#cfd3da;display:block;margin-top:4px}
+  .actions-right{margin-inline-start:auto;display:flex;gap:8px;flex-wrap:wrap}
+  /* تقرير الملخص */
+  #summary{margin-top:16px}
+  #summary table tfoot td{font-weight:700}
+  /* طباعة: نخفي كل شيء إلا نافذة الطباعة التي نفتحها في تبويب منفصل */
+  @media print { body{background:#fff} }
 </style>
 </head>
 <body>
@@ -46,8 +51,12 @@
     <span class="sep"></span>
     <button id="btnSave" class="primary">حفظ</button>
     <button id="btnSaveAs">حفظ باسم…</button>
-    <span class="sep"></span>
-    <button id="resetBtn">إرجاع الافتراضي</button>
+
+    <div class="actions-right">
+      <button id="btnPrint">🖨 طباعة المنتج</button>
+      <button id="btnSummary">📊 تقرير الملخص</button>
+      <button id="resetBtn">إرجاع الافتراضي</button>
+    </div>
   </header>
 
   <main class="grid">
@@ -80,7 +89,7 @@
     <section class="card">
       <h2>المصاريف الثابتة & التوزيع بين المنتجات</h2>
 
-      <!-- مصاريف ثابتة عامة -->
+      <!-- مصاريف ثابتة عامة (تؤخذ كمرجع لجميع المنتجات) -->
       <div class="kpi">
         <div><label class="mini">إيجار</label><input type="number" id="rent" value="5000" min="0" step="0.01"></div>
         <div><label class="mini">رواتب</label><input type="number" id="labor" value="8000" min="0" step="0.01"></div>
@@ -100,11 +109,6 @@
         <div class="pill">إجمالي مبيعات كل المنتجات<b id="totalExpectedAll">0</b></div>
         <div class="pill">نصيب هذا المنتج من المصاريف<b id="fixedShareForProduct">0.00</b></div>
         <div class="pill">نصيب الكوب من المصاريف<b id="fixedPerCup">0.00</b></div>
-      </div>
-
-      <div class="mini" style="margin-top:8px">
-        التوزيع = المصاريف الثابتة × (مبيعات هذا المنتج ÷ مجموع مبيعات جميع المنتجات المحفوظة).
-        إذا كان المجموع = 0، نرجع لقسمة المصاريف على إنتاج هذا المنتج فقط.
       </div>
     </section>
 
@@ -127,27 +131,31 @@
       </div>
     </section>
 
-    <section class="card">
-      <h2>دفعة الإنتاج & نقطة التعادل</h2>
-      <div class="kpi">
-        <div><label class="mini">عدد الأكواب في الدفعة</label><input type="number" id="batchQty" value="50" min="1" step="1"></div>
-        <div>
-          <label class="mini">سعر البيع المستخدم للدفعة</label>
-          <select id="batchPriceMode">
-            <option value="manual">اليدوي (قبل الضريبة)</option>
-            <option value="suggestedAfterVat">المقترح (بعد الضريبة)</option>
-          </select>
-        </div>
+    <section id="summary" class="card">
+      <h2>📊 تقرير توزيع المصاريف لكل المنتجات</h2>
+      <div class="mini">يستخدم المصاريف الثابتة من القيم الموجودة في هذا المنتج الحالي، ويُوزّعها على جميع المنتجات حسب مبيعاتها المتوقعة.</div>
+      <div style="margin:10px 0">
+        <button id="btnRefreshSummary">تحديث التقرير</button>
       </div>
-      <div class="kpi" style="margin-top:12px">
-        <div class="pill">تكلفة الدفعة الإجمالية<b id="batchCost">0.00</b></div>
-        <div class="pill">إيراد الدفعة<b id="batchRevenue">0.00</b></div>
-        <div class="pill">ربح الدفعة (تقريبي)<b id="batchProfit">0.00</b></div>
-      </div>
-      <div class="mini" style="margin-top:8px">
-        🔻 نقطة التعادل تُحسب بناءً على ربح الكوب اليدوي قبل الضريبة.
-      </div>
-      <div style="margin-top:8px" class="pill">نقطة التعادل (عدد الأكواب)<b id="breakevenCups">0</b></div>
+      <table>
+        <thead>
+          <tr>
+            <th>المنتج</th>
+            <th>المبيعات المتوقعة</th>
+            <th>نصيب المصاريف (ريال)</th>
+            <th>النسبة %</th>
+          </tr>
+        </thead>
+        <tbody id="summaryBody"></tbody>
+        <tfoot>
+          <tr>
+            <td><b>الإجمالي</b></td>
+            <td id="sumExp">0</td>
+            <td id="sumShare">0.00</td>
+            <td>100%</td>
+          </tr>
+        </tfoot>
+      </table>
     </section>
   </main>
 
@@ -166,8 +174,8 @@ const defaultMaterials = Array.from({length:10}, (_,i)=>({
 const defaultState = {
   materials: JSON.parse(JSON.stringify(defaultMaterials)),
   rent:5000, labor:8000, utilities:1200, other:800,
-  expectedSales: 2000,                 // مبيعات هذا المنتج
-  cupsMonthly: 2000,                   // بديل احتياطي عند عدم وجود إجمالي
+  expectedSales: 2000,
+  cupsMonthly: 2000,
   sellPriceManual:30, targetMargin:40, vatRate:15,
   batchQty:50, batchPriceMode:'manual'
 };
@@ -207,53 +215,6 @@ function setCurrentProductState(state){
   const list = loadProducts().map(p=> p.id===id ? ({...p, state}) : p);
   saveProducts(list);
 }
-
-/* ===== واجهة CRUD المنتجات ===== */
-$('#productSelect').addEventListener('change', ()=>{
-  setCurrentId($('#productSelect').value);
-  const p = getCurrentProduct(); if(p) populate(p.state);
-});
-$('#btnNew').addEventListener('click', ()=>{
-  const name = prompt('اسم المنتج الجديد؟','منتج جديد'); if(!name) return;
-  const id = uid();
-  const list = loadProducts();
-  list.push({id, name, state: JSON.parse(JSON.stringify(defaultState))});
-  saveProducts(list); setCurrentId(id); renderProductSelect();
-  populate(defaultState);
-});
-$('#btnRename').addEventListener('click', ()=>{
-  const p = getCurrentProduct(); if(!p) return;
-  const name = prompt('اسم جديد للمنتج:', p.name); if(!name) return;
-  const list = loadProducts().map(x=> x.id===p.id ? ({...x, name}) : x);
-  saveProducts(list); renderProductSelect();
-});
-$('#btnDelete').addEventListener('click', ()=>{
-  const p = getCurrentProduct(); if(!p) return;
-  if(!confirm(`حذف المنتج "${p.name}"؟`)) return;
-  let list = loadProducts().filter(x=> x.id!==p.id);
-  if(list.length===0){
-    const id = uid();
-    list = [{id, name:'منتج جديد', state: JSON.parse(JSON.stringify(defaultState))}];
-    setCurrentId(id);
-  }else{
-    setCurrentId(list[0].id);
-  }
-  saveProducts(list); renderProductSelect();
-  const cur = getCurrentProduct(); populate(cur.state);
-});
-$('#btnSave').addEventListener('click', ()=>{
-  setCurrentProductState(collectState());
-  notify('تم الحفظ ✅');
-});
-$('#btnSaveAs').addEventListener('click', ()=>{
-  const name = prompt('حفظ باسم؟','نسخة جديدة'); if(!name) return;
-  const state = collectState();
-  const id = uid();
-  const list = loadProducts();
-  list.push({id, name, state});
-  saveProducts(list); setCurrentId(id); renderProductSelect();
-  notify('تم إنشاء نسخة جديدة ✅');
-});
 
 /* ===== أدوات ===== */
 function num(sel){ return parseFloat($(sel).value)||0; }
@@ -345,7 +306,6 @@ function populate(state){
 
 /* ===== الحسابات الأساسية + توزيع المصاريف ===== */
 function recalc(){
-  // نجمع حالة هذا المنتج أولًا
   const st = collectState();
 
   // 1) تكلفة المواد
@@ -364,7 +324,7 @@ function recalc(){
   const fixedTotal = st.rent + st.labor + st.utilities + st.other;
   $('#fixedTotal').textContent = fmt(fixedTotal);
 
-  // 3) إجمالي المبيعات لكل المنتجات (من LocalStorage لجميع المنتجات)
+  // 3) إجمالي المبيعات لكل المنتجات
   const products = loadProducts();
   const totalExpectedAll = products.reduce((sum,p)=>{
     const s = (p && p.state && Number.isFinite(p.state.expectedSales)) ? p.state.expectedSales : 0;
@@ -377,11 +337,9 @@ function recalc(){
   let fixedPerCup = 0;
 
   if(totalExpectedAll > 0){
-    // توزيع نسبي على جميع المنتجات
-    fixedShareForProduct = fixedTotal * ( (st.expectedSales || 0) / totalExpectedAll );
+    fixedShareForProduct = fixedTotal * ((st.expectedSales || 0) / totalExpectedAll);
     fixedPerCup = (st.expectedSales>0) ? (fixedShareForProduct / st.expectedSales) : 0;
   }else{
-    // رجوع للطريقة القديمة (على نفس المنتج فقط)
     fixedShareForProduct = fixedTotal;
     fixedPerCup = fixedTotal / Math.max(1, st.cupsMonthly);
   }
@@ -389,7 +347,7 @@ function recalc(){
   $('#fixedShareForProduct').textContent = fmt(fixedShareForProduct);
   $('#fixedPerCup').textContent = fmt(fixedPerCup);
 
-  // 5) التكلفة الحقيقية للكوب = مواد + نصيب الكوب من المصاريف
+  // 5) التكلفة الحقيقية للكوب
   const realCost = materialsTotal + fixedPerCup;
   $('#realCost').textContent = fmt(realCost);
 
@@ -419,15 +377,190 @@ function recalc(){
   $('#batchRevenue').textContent = fmt(batchRevenue);
   $('#batchProfit').textContent = fmt(batchProfit);
 
-  // 9) نقطة التعادل (تقريبية)
+  // 9) نقطة التعادل بناءً على نصيب المنتج فقط
   const breakevenCups = (profitManual>0) ? Math.ceil((fixedShareForProduct) / profitManual) : 0;
-  $('#breakevenCups').textContent = breakevenCups;
+  $('#breakevenCups') && ($('#breakevenCups').textContent = breakevenCups);
 
-  // حفظ الحالة ضمن المنتج الحالي
+  // حفظ الحالة للمنتج الحالي + تحديت تقرير الملخص
   setCurrentProductState(st);
+  renderSummary();
 }
 
-/* ===== إشعارات صغيرة ===== */
+/* ===== تقرير الملخص ===== */
+function renderSummary(){
+  const body = $('#summaryBody');
+  if(!body) return;
+  body.innerHTML = '';
+
+  const cur = getCurrentProduct();
+  if(!cur) return;
+
+  // المصاريف الثابتة المرجعية من المنتج الحالي
+  const fixedTotal = (cur.state.rent||0) + (cur.state.labor||0) + (cur.state.utilities||0) + (cur.state.other||0);
+
+  const list = loadProducts();
+  const totalExpectedAll = list.reduce((s,p)=> s + Math.max(0, parseInt((p.state?.expectedSales)||0)), 0) || 0;
+
+  let sumShare = 0;
+  list.forEach(p=>{
+    const exp = Math.max(0, parseInt((p.state?.expectedSales)||0));
+    const share = (totalExpectedAll>0) ? (fixedTotal * (exp/totalExpectedAll)) : 0;
+    const pct = (fixedTotal>0) ? (share / fixedTotal * 100) : 0;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${p.name || 'بدون اسم'}</td>
+      <td>${exp}</td>
+      <td>${fmt(share)}</td>
+      <td>${fmt(pct)}%</td>
+    `;
+    body.appendChild(tr);
+    sumShare += share;
+  });
+
+  $('#sumExp').textContent = totalExpectedAll;
+  $('#sumShare').textContent = fmt(sumShare);
+}
+$('#btnRefreshSummary')?.addEventListener('click', renderSummary);
+$('#btnSummary')?.addEventListener('click', ()=>{ document.getElementById('summary').scrollIntoView({behavior:'smooth'}); });
+
+/* ===== طباعة المنتج ===== */
+function printCurrentProduct(){
+  const p = getCurrentProduct(); if(!p) return;
+  const st = p.state;
+
+  // احسب القيم الضرورية للطباعة
+  const materials = st.materials || [];
+  const materialsTotal = materials.reduce((sum,m)=>{
+    const packPrice = +m.packPrice||0, packCount = Math.max(0.000001, +m.packCount||0), used = +m.usedCount||0;
+    return sum + (packPrice/packCount)*used;
+  },0);
+  const fixedTotal = (st.rent||0)+(st.labor||0)+(st.utilities||0)+(st.other||0);
+  const totalExpectedAll = loadProducts().reduce((s,pp)=> s + Math.max(0, parseInt((pp.state?.expectedSales)||0)), 0);
+  const fixedShareForProduct = (totalExpectedAll>0) ? fixedTotal*((st.expectedSales||0)/totalExpectedAll) : fixedTotal;
+  const fixedPerCup = (st.expectedSales>0 && totalExpectedAll>0) ? (fixedShareForProduct/st.expectedSales) : (fixedTotal/Math.max(1, st.cupsMonthly||1));
+  const realCost = materialsTotal + fixedPerCup;
+  const profitManual = (st.sellPriceManual||0) - realCost;
+  const marginManual = (st.sellPriceManual>0) ? (profitManual/st.sellPriceManual*100) : 0;
+  const suggestedPrice = (1 - (st.targetMargin||0)/100) <= 0 ? 0 : realCost/(1-(st.targetMargin||0)/100);
+  const vatPerCup = suggestedPrice * ((st.vatRate||0)/100);
+  const suggestedAfterVat = suggestedPrice + vatPerCup;
+
+  const win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(`
+    <html lang="ar" dir="rtl">
+    <head>
+      <meta charset="utf-8" />
+      <title>طباعة — ${p.name||'منتج'}</title>
+      <style>
+        body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;padding:24px;line-height:1.6}
+        h1,h2{margin:0 0 10px}
+        table{width:100%;border-collapse:collapse;margin:12px 0}
+        th,td{border:1px solid #ccc;padding:8px;text-align:center}
+        th{background:#f4f4f4}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+      </style>
+    </head>
+    <body>
+      <h1>تفاصيل المنتج: ${p.name||'منتج'}</h1>
+      <div class="grid">
+        <div><b>مبيعات متوقعة:</b> ${st.expectedSales||0}</div>
+        <div><b>إجمالي المصاريف الثابتة (مرجع):</b> ${fixedTotal.toFixed(2)}</div>
+        <div><b>نصيب المنتج من المصاريف:</b> ${fixedShareForProduct.toFixed(2)}</div>
+        <div><b>نصيب الكوب من المصاريف:</b> ${fixedPerCup.toFixed(2)}</div>
+      </div>
+
+      <h2>المواد الخام</h2>
+      <table>
+        <thead><tr><th>المادة</th><th>الوحدة</th><th>سعر الشدة</th><th>وحدات في الشدة</th><th>المستخدمة</th><th>التكلفة</th></tr></thead>
+        <tbody>
+          ${materials.map(m=>{
+            const unitCost = (+m.packPrice||0)/Math.max(0.000001,(+m.packCount||0));
+            const cost = unitCost*(+m.usedCount||0);
+            const unit = m.unit==='g'?'جم':(m.unit==='ml'?'مل':'حبة');
+            return `<tr>
+              <td>${m.name||''}</td>
+              <td>${unit}</td>
+              <td>${(+m.packPrice||0).toFixed(2)}</td>
+              <td>${(+m.packCount||0).toFixed(2)}</td>
+              <td>${(+m.usedCount||0).toFixed(2)}</td>
+              <td>${cost.toFixed(2)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot><tr><td colspan="5"><b>إجمالي تكلفة المواد</b></td><td><b>${materialsTotal.toFixed(2)}</b></td></tr></tfoot>
+      </table>
+
+      <h2>التسعير والربحية</h2>
+      <div class="grid">
+        <div><b>التكلفة الحقيقية للكوب:</b> ${realCost.toFixed(2)}</div>
+        <div><b>سعر البيع (يدوي):</b> ${(st.sellPriceManual||0).toFixed(2)}</div>
+        <div><b>صافي الربح (يدوي):</b> ${profitManual.toFixed(2)}</div>
+        <div><b>هامش الربح %:</b> ${marginManual.toFixed(2)}%</div>
+        <div><b>سعر مقترح قبل الضريبة:</b> ${suggestedPrice.toFixed(2)}</div>
+        <div><b>ضريبة لكل كوب:</b> ${vatPerCup.toFixed(2)}</div>
+        <div><b>سعر مقترح بعد الضريبة:</b> ${suggestedAfterVat.toFixed(2)}</div>
+      </div>
+
+      <script>window.onload=()=>window.print()</script>
+    </body>
+    </html>
+  `);
+  win.document.close();
+}
+$('#btnPrint')?.addEventListener('click', printCurrentProduct);
+
+/* ===== واجهة CRUD المنتجات ===== */
+function renderProductSelectAndLoad(){
+  renderProductSelect();
+  const cur = getCurrentProduct();
+  populate(cur ? cur.state : JSON.parse(JSON.stringify(defaultState)));
+}
+$('#productSelect').addEventListener('change', ()=>{
+  setCurrentId($('#productSelect').value);
+  const p = getCurrentProduct(); if(p) populate(p.state);
+});
+$('#btnNew').addEventListener('click', ()=>{
+  const name = prompt('اسم المنتج الجديد؟','منتج جديد'); if(!name) return;
+  const id = uid();
+  const list = loadProducts();
+  list.push({id, name, state: JSON.parse(JSON.stringify(defaultState))});
+  saveProducts(list); setCurrentId(id); renderProductSelectAndLoad();
+});
+$('#btnRename').addEventListener('click', ()=>{
+  const p = getCurrentProduct(); if(!p) return;
+  const name = prompt('اسم جديد للمنتج:', p.name); if(!name) return;
+  const list = loadProducts().map(x=> x.id===p.id ? ({...x, name}) : x);
+  saveProducts(list); renderProductSelect();
+});
+$('#btnDelete').addEventListener('click', ()=>{
+  const p = getCurrentProduct(); if(!p) return;
+  if(!confirm(`حذف المنتج "${p.name}"؟`)) return;
+  let list = loadProducts().filter(x=> x.id!==p.id);
+  if(list.length===0){
+    const id = uid();
+    list = [{id, name:'منتج جديد', state: JSON.parse(JSON.stringify(defaultState))}];
+    setCurrentId(id);
+  }else{
+    setCurrentId(list[0].id);
+  }
+  saveProducts(list); renderProductSelectAndLoad();
+});
+$('#btnSave').addEventListener('click', ()=>{
+  setCurrentProductState(collectState());
+  notify('تم الحفظ ✅');
+});
+$('#btnSaveAs').addEventListener('click', ()=>{
+  const name = prompt('حفظ باسم؟','نسخة جديدة'); if(!name) return;
+  const state = collectState();
+  const id = uid();
+  const list = loadProducts();
+  list.push({id, name, state});
+  saveProducts(list); setCurrentId(id); renderProductSelectAndLoad();
+  notify('تم إنشاء نسخة جديدة ✅');
+});
+
+/* ===== إشعار صغير ===== */
 function notify(txt){
   const b = document.createElement('div');
   b.textContent = txt;
@@ -438,28 +571,24 @@ function notify(txt){
 
 /* ===== تهيئة ===== */
 function init(){
-  renderProductSelect();
-  const cur = getCurrentProduct();
-  populate(cur ? cur.state : JSON.parse(JSON.stringify(defaultState)));
+  renderProductSelectAndLoad();
+  document.addEventListener('input', (e)=>{ if(e.target.matches('input, select')) recalc(); });
+  document.addEventListener('click', (e)=>{
+    if(e.target && e.target.id==='addRowBtn'){
+      const row = {name:'مادة جديدة',unit:'piece',packPrice:0,packCount:1,usedCount:0};
+      tblBody.appendChild(makeRow(row));
+      recalc();
+    }
+  });
+  $('#resetBtn').addEventListener('click', ()=>{
+    if(confirm('إرجاع القيم الافتراضية لهذا المنتج؟')){
+      const st = JSON.parse(JSON.stringify(defaultState));
+      populate(st);
+      setCurrentProductState(st);
+    }
+  });
 }
 init();
-
-/* ===== أحداث عامة ===== */
-document.addEventListener('input', (e)=>{ if(e.target.matches('input, select')) recalc(); });
-document.addEventListener('click', (e)=>{
-  if(e.target && e.target.id==='addRowBtn'){
-    const row = {name:'مادة جديدة',unit:'piece',packPrice:0,packCount:1,usedCount:0};
-    tblBody.appendChild(makeRow(row));
-    recalc();
-  }
-});
-$('#resetBtn').addEventListener('click', ()=>{
-  if(confirm('إرجاع القيم الافتراضية لهذا المنتج؟')){
-    const st = JSON.parse(JSON.stringify(defaultState));
-    populate(st);
-    setCurrentProductState(st);
-  }
-});
 </script>
 </body>
 </html>
