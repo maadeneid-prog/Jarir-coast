@@ -112,7 +112,7 @@
   </section>
 </main>
 
-<footer>💾 البيانات والمنتجات تُحفظ محليًا (LocalStorage). لا يوجد تثبيت تطبيق — نسخة متصفح فقط.</footer>
+<footer>💾 البيانات والمنتجات تُحفظ محليًا (LocalStorage). (نسخة متصفح فقط)</footer>
 
 <script>
 const $ = (s)=>document.querySelector(s);
@@ -216,12 +216,23 @@ function collectState(){
     vatRate: parseFloat($('#vatRate').value)||0
   };
 }
+
+/* ✅ تعبئة مع إصلاح: لو المواد فاضية نعبي 10 صفوف تلقائيًا */
 function populate(state){
+  if (!state.materials || state.materials.length === 0) {
+    state.materials = JSON.parse(JSON.stringify(defaultMaterials));
+    setCurrentProductState(state); // نحفظ التصحيح في المنتج الحالي
+  }
   tblBody.innerHTML='';
   (state.materials||[]).forEach(addRow);
-  $('#rent').value = state.rent; $('#labor').value = state.labor; $('#utilities').value = state.utilities; $('#other').value = state.other;
-  $('#expectedSales').value = state.expectedSales;
-  $('#sellPriceManual').value = state.sellPriceManual; $('#targetMargin').value = state.targetMargin; $('#vatRate').value = state.vatRate;
+  $('#rent').value = state.rent || 0;
+  $('#labor').value = state.labor || 0;
+  $('#utilities').value = state.utilities || 0;
+  $('#other').value = state.other || 0;
+  $('#expectedSales').value = state.expectedSales ?? 0;
+  $('#sellPriceManual').value = state.sellPriceManual ?? 0;
+  $('#targetMargin').value = state.targetMargin ?? 0;
+  $('#vatRate').value = state.vatRate ?? 0;
   recalc();
 }
 
@@ -288,6 +299,11 @@ function renderSummary(){
 
   let sumShare = 0;
   list.forEach(p=>{
+    // إصلاح قديم: المنتج قد يفتقد materials -> نضمن تعبئته لاحقًا عند فتحه
+    if (!p.state.materials || p.state.materials.length===0){
+      p.state.materials = JSON.parse(JSON.stringify(defaultMaterials));
+      saveProducts(list);
+    }
     const exp = Math.max(0, parseInt(p.state?.expectedSales||0));
     const share = (totalExpectedAll>0) ? fixed * (exp / totalExpectedAll) : 0;
     const pct = (fixed>0) ? (share / fixed * 100) : 0;
