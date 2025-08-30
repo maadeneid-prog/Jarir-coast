@@ -33,6 +33,7 @@
   <button id="btnSave" class="primary">حفظ</button>
   <button id="btnSaveAs">حفظ باسم…</button>
   <button id="btnPrint">🖨 طباعة</button>
+  <button id="btnFix">🛠 إصلاح البيانات</button>
 </header>
 
 <main>
@@ -115,10 +116,11 @@
 <footer>💾 البيانات والمنتجات تُحفظ محليًا (LocalStorage). (نسخة متصفح فقط)</footer>
 
 <script>
+/* ===== عناصر مساعدة ===== */
 const $ = (s)=>document.querySelector(s);
 const tblBody = $('#materialsTbl tbody');
 
-/* بيانات افتراضية: 10 مواد */
+/* ===== بيانات افتراضية: 10 مواد ===== */
 const defaultMaterials = Array.from({length:10}, (_,i)=>({
   name:`مادة ${i+1}`, unit:'piece', packPrice:0, packCount:1, usedCount:0
 }));
@@ -129,22 +131,83 @@ const defaultState = {
   sellPriceManual:30, targetMargin:40, vatRate:15
 };
 
-/* تخزين منتجات */
-const PRODUCTS_KEY='stjarir_products_v1'; const CURRENT_ID_KEY='stjarir_current_id_v1';
+/* ===== مفاتيح التخزين ===== */
+const PRODUCTS_KEY='stjarir_products_v1';
+const CURRENT_ID_KEY='stjarir_current_id_v1';
+
+/* ===== أدوات عامة ===== */
 function uid(){return 'p_'+Math.random().toString(36).slice(2,9)}
+function fmt(n){ return (Math.round((+n)*100)/100).toFixed(2); }
+function toNum(v, def=0){ v = parseFloat(v); return Number.isFinite(v) ? v : def; }
+function cloneDefaultMaterials(){ return JSON.parse(JSON.stringify(defaultMaterials)); }
+
+/* ===== تخزين/تحميل ===== */
 function loadProducts(){ try{ return JSON.parse(localStorage.getItem(PRODUCTS_KEY)||'[]'); }catch{ return []; } }
 function saveProducts(list){ localStorage.setItem(PRODUCTS_KEY, JSON.stringify(list)); }
 function getCurrentId(){ return localStorage.getItem(CURRENT_ID_KEY)||''; }
 function setCurrentId(id){ localStorage.setItem(CURRENT_ID_KEY, id); }
 function getCurrentProduct(){ const id = getCurrentId(); return loadProducts().find(p=>p.id===id); }
 
-/* واجهة المنتجات */
+/* ===== تطبيع/هجرة البيانات (Fix) ===== */
+function normalizeState(st){
+  const base = {
+    materials: cloneDefaultMaterials(),
+    rent:0, labor:0, utilities:0, other:0,
+    expectedSales:0, sellPriceManual:0, targetMargin:40, vatRate:15
+  };
+  if(!st || Array.isArray(st)) st = {...base};
+  if(!Array.isArray(st.materials)) st.materials = cloneDefaultMaterials();
+  st.materials = st.materials.map((m, i)=>({
+    name: (m && m.name!=null) ? String(m.name) : `مادة ${i+1}`,
+    unit: (m && (m.unit==='g' || m.unit==='ml' || m.unit==='piece')) ? m.unit : 'piece',
+    packPrice: toNum(m?.packPrice, 0),
+    packCount: Math.max(0.000001, toNum(m?.packCount, 1)),
+    usedCount: Math.max(0, toNum(m?.usedCount, 0)),
+  }));
+  while(st.materials.length < 10) st.materials.push({name:`مادة ${st.materials.length+1}`,unit:'piece',packPrice:0,packCount:1,usedCount:0});
+  st.rent = toNum(st.rent, 0);
+  st.labor = toNum(st.labor, 0);
+  st.utilities = toNum(st.utilities, 0);
+  st.other = toNum(st.other, 0);
+  st.expectedSales = Math.max(0, parseInt(st.expectedSales||0));
+  st.sellPriceManual = toNum(st.sellPriceManual, 0);
+  st.targetMargin = toNum(st.targetMargin, 40);
+  st.vatRate = toNum(st.vatRate, 15);
+  return st;
+}
+
+function migrateData(){
+  let list; try { list = JSON.parse(localStorage.getItem(PRODUCTS_KEY)||'[]'); } catch { list = []; }
+  if(!Array.isArray(list) || !list.length){
+    const id = uid();
+    const prod = { id, name:'منتج جديد', state: normalizeState(JSON.parse(JSON.stringify(defaultState))) };
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify([prod]));
+    localStorage.setItem(CURRENT_ID_KEY, id);
+    return { fixed:true, count:1, note:'إعادة إنشاء' };
+  }
+  let fixed = 0;
+  list = list.map(p=>{
+    const id = p?.id || uid();
+    const name = (p?.name!=null) ? String(p.name) : 'منتج';
+    const state = normalizeState(p?.state);
+    fixed++;
+    return { id, name, state };
+  });
+  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(list));
+  let cur = localStorage.getItem(CURRENT_ID_KEY);
+  if(!cur || !list.find(x=>x.id===cur)){
+    localStorage.setItem(CURRENT_ID_KEY, list[0].id);
+  }
+  return { fixed:true, count: list.length };
+}
+
+/* ===== واجهة المنتجات ===== */
 function renderProductSelect(){
   const sel = $('#productSelect');
   let list = loadProducts();
   if(!list.length){
     const id = uid();
-    list = [{id, name:'منتج جديد', state: JSON.parse(JSON.stringify(defaultState))}];
+    list = [{id, name:'منتج جديد', state: normalizeState(JSON.parse(JSON.stringify(defaultState)))}];
     saveProducts(list); setCurrentId(id);
   }
   sel.innerHTML='';
@@ -161,7 +224,7 @@ function setCurrentProductState(state){
   saveProducts(list);
 }
 
-/* جدول المواد */
+/* ===== جدول المواد ===== */
 function unitLabel(u){ return u==='g'?'جم':(u==='ml'?'مل':'حبة'); }
 function addRow(item){
   const tr = document.createElement('tr');
@@ -195,7 +258,7 @@ function addRow(item){
   tblBody.appendChild(tr);
 }
 
-/* جمع/تعبئة الحالة */
+/* ===== جمع/تعبئة الحالة ===== */
 function collectState(){
   const materials = [...tblBody.querySelectorAll('tr')].map(tr=>({
     name: tr.querySelector('.name').value||'',
@@ -217,11 +280,12 @@ function collectState(){
   };
 }
 
-/* ✅ تعبئة مع إصلاح: لو المواد فاضية نعبي 10 صفوف تلقائيًا */
+/* ===== تعبئة مع إصلاح تلقائي للمواد الفارغة ===== */
 function populate(state){
+  // إصلاح: لو المواد فاضية، نعبي 10 صفوف افتراضيًا
   if (!state.materials || state.materials.length === 0) {
-    state.materials = JSON.parse(JSON.stringify(defaultMaterials));
-    setCurrentProductState(state); // نحفظ التصحيح في المنتج الحالي
+    state.materials = cloneDefaultMaterials();
+    setCurrentProductState(state); // نحفظ التصحيح
   }
   tblBody.innerHTML='';
   (state.materials||[]).forEach(addRow);
@@ -236,8 +300,7 @@ function populate(state){
   recalc();
 }
 
-/* حسابات */
-function fmt(n){ return (Math.round(n*100)/100).toFixed(2); }
+/* ===== الحسابات ===== */
 function recalc(){
   const st = collectState();
 
@@ -286,7 +349,7 @@ function recalc(){
   renderSummary();
 }
 
-/* تقرير الملخص */
+/* ===== تقرير الملخص ===== */
 function renderSummary(){
   const body = $('#summaryBody');
   body.innerHTML='';
@@ -299,9 +362,9 @@ function renderSummary(){
 
   let sumShare = 0;
   list.forEach(p=>{
-    // إصلاح قديم: المنتج قد يفتقد materials -> نضمن تعبئته لاحقًا عند فتحه
+    // ضمان وجود المواد لكل منتج
     if (!p.state.materials || p.state.materials.length===0){
-      p.state.materials = JSON.parse(JSON.stringify(defaultMaterials));
+      p.state.materials = cloneDefaultMaterials();
       saveProducts(list);
     }
     const exp = Math.max(0, parseInt(p.state?.expectedSales||0));
@@ -316,12 +379,12 @@ function renderSummary(){
   $('#sumShare').textContent = fmt(sumShare);
 }
 
-/* أزرار وإجراءات */
+/* ===== أزرار وإجراءات ===== */
 $('#productSelect').addEventListener('change', ()=>{ setCurrentId($('#productSelect').value); const p=getCurrentProduct(); if(p) populate(p.state); });
 $('#btnNew').addEventListener('click', ()=>{
   const name = prompt('اسم المنتج الجديد؟','منتج جديد'); if(!name) return;
   const id = uid();
-  const list = loadProducts(); list.push({id, name, state: JSON.parse(JSON.stringify(defaultState))});
+  const list = loadProducts(); list.push({id, name, state: normalizeState(JSON.parse(JSON.stringify(defaultState)))});
   saveProducts(list); setCurrentId(id); renderProductSelect(); populate(defaultState);
 });
 $('#btnRename').addEventListener('click', ()=>{
@@ -334,7 +397,7 @@ $('#btnDelete').addEventListener('click', ()=>{
   if(!confirm(`حذف "${p.name}"؟`)) return;
   let list = loadProducts().filter(x=> x.id!==p.id);
   if(!list.length){
-    const id = uid(); list=[{id, name:'منتج جديد', state: JSON.parse(JSON.stringify(defaultState))}]; setCurrentId(id);
+    const id = uid(); list=[{id, name:'منتج جديد', state: normalizeState(JSON.parse(JSON.stringify(defaultState)))}]; setCurrentId(id);
   }else{ setCurrentId(list[0].id); }
   saveProducts(list); renderProductSelect(); populate(getCurrentProduct().state);
 });
@@ -342,18 +405,27 @@ $('#btnSave').addEventListener('click', ()=>{ setCurrentProductState(collectStat
 $('#btnSaveAs').addEventListener('click', ()=>{
   const name = prompt('اسم النسخة؟','نسخة جديدة'); if(!name) return;
   const id = uid(); const st = collectState(); const list = loadProducts();
-  list.push({id, name, state: st}); saveProducts(list); setCurrentId(id); renderProductSelect(); alert('تم إنشاء نسخة جديدة');
+  list.push({id, name, state: normalizeState(st)}); saveProducts(list); setCurrentId(id); renderProductSelect(); alert('تم إنشاء نسخة جديدة');
 });
 $('#btnPrint').addEventListener('click', ()=>{ window.print(); });
+$('#btnFix').addEventListener('click', ()=>{
+  const r = migrateData();
+  alert('تم إصلاح البيانات ✅' + (r?.count ? ` (منتجات: ${r.count})` : ''));
+  renderProductSelect();
+  const p = getCurrentProduct();
+  populate(p ? p.state : normalizeState(JSON.parse(JSON.stringify(defaultState))));
+});
 
 $('#addRowBtn').addEventListener('click', ()=>{ addRow({name:'',unit:'piece',packPrice:0,packCount:1,usedCount:0}); recalc(); });
 document.addEventListener('input', (e)=>{ if(e.target.matches('input,select')) recalc(); });
 
-/* تشغيل أولي */
+/* ===== تشغيل أولي ===== */
 function init(){
+  // هجرة تلقائية عند الإقلاع
+  migrateData();
   renderProductSelect();
   const p = getCurrentProduct();
-  populate(p ? p.state : JSON.parse(JSON.stringify(defaultState)));
+  populate(p ? p.state : normalizeState(JSON.parse(JSON.stringify(defaultState))));
 }
 init();
 </script>
